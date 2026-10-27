@@ -1,0 +1,6 @@
+streamlit>=1.39.0
+requests>=2.31.0
+numpy>=1.24.3,<2.0.0
+pydub>=0.25.1
+faster-whisper>=1.0.2
+SpeechRecognition>=3.10.0
