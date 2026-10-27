@@ -84,6 +84,7 @@ def json_bytes(data: Any) -> bytes:
 
 from jobs import get_job, list_jobs, submit_job
 from semantic_scene_planner import plan_scenes, scenes_to_json
+from github_reports import publish_scene_plan
 
 st.markdown("""
 <section class="hero" dir="rtl">
@@ -229,7 +230,30 @@ if planned_scenes:
             if scene.get("start_time") is not None and scene.get("end_time") is not None:
                 st.caption(f"التوقيت التقديري: {scene['start_time']:.2f}s – {scene['end_time']:.2f}s")
     st.download_button("تنزيل خطة المشاهد JSON", data=scenes_to_json(planned_scenes).encode("utf-8"), file_name="semantic_scene_plan.json", mime="application/json", use_container_width=True)
+    st.warning("مستودعك عام: عند النشر سيصبح نص المشاهد وخطتها متاحين للعامة. لا تنشر محتوى حساسًا.")
+    if st.button("نشر تقرير المشاهد إلى GitHub ونسخ رابطه", use_container_width=True, key="publish_scene_report"):
+        try:
+            with st.spinner("جارٍ نشر تقرير JSON صغير إلى مستودع GitHub..."):
+                published = publish_scene_plan(planned_scenes, st.session_state.get("planned_scenes_source", ""))
+            st.session_state["last_github_report_url"] = published["url"]
+            st.success("تم نشر التقرير بنجاح. انسخ الرابط التالي وأرسله في محادثتنا للمراجعة.")
+            st.code(published["url"], language=None)
+            st.link_button("فتح التقرير في GitHub", published["url"], use_container_width=True)
+        except Exception as exc:
+            st.error(f"تعذر نشر التقرير: {exc}")
 
+
+with st.expander("إعداد النشر إلى GitHub (مرة واحدة)"):
+    st.markdown(
+        """
+        1. أنشئ Fine-grained personal access token من إعدادات GitHub.
+        2. اختر المستودع `Video_editing-v4` فقط، وامنح صلاحية **Contents: Read and write**.
+        3. أضف الرمز في Secrets على منصة الاستضافة باسم `GITHUB_TOKEN`، وأضف `GITHUB_REPO_OWNER = \"anesblr2020-eng\"` و`GITHUB_REPO_NAME = \"Video_editing-v4\"` و`GITHUB_REPO_BRANCH = \"main\"`.
+        4. لا تضع الرمز في الكود أو GitHub ولا ترسله في المحادثة.
+
+        النشر يدوي عند الضغط فقط، ويحفظ ملف JSON صغيرًا داخل `reports/`؛ لا يرفع الصوت أو الفيديو.
+        """
+    )
 
 with st.expander("مهم حول العمل في الخلفية"):
     st.markdown("""
@@ -239,4 +263,4 @@ with st.expander("مهم حول العمل في الخلفية"):
     - هذه ليست بعدُ قائمة مهام موزعة/مضمونة الاستمرار عبر إعادة تشغيل الخادم؛ لذلك لا نعد باستمرار المعالجة إذا أُغلق الخادم نفسه.
     """)
 
-st.markdown('<div style="text-align:center;color:#60736a;font-size:12px;padding:28px 0 4px">إعادة البناء — المرحلة 05: الصوت وخطة المشاهد الدلالية</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#60736a;font-size:12px;padding:28px 0 4px">إعادة البناء — المرحلة 07: الصوت وخطة المشاهد الدلالية وتقارير GitHub</div>', unsafe_allow_html=True)
