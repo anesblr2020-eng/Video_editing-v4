@@ -169,8 +169,8 @@ def apply_padding_and_merge(
     if not chunks:
         return []
 
-    pre_pad = int(pre_pad_override_ms) if pre_pad_override_ms is not None else max(30, min(65, int(padding_ms * 0.70)))
-    post_pad = int(post_pad_override_ms) if post_pad_override_ms is not None else max(40, min(80, int(padding_ms * 0.85)))
+    pre_pad = int(pre_pad_override_ms) if pre_pad_override_ms is not None else max(30, min(180, int(padding_ms * 0.70)))
+    post_pad = int(post_pad_override_ms) if post_pad_override_ms is not None else max(40, min(200, int(padding_ms * 0.85)))
     # ضمان أن أي صمت يتجاوز 250ms يتم قصه وعدم دمجه
     effective_bridge = min(250, max(60, int(min_bridge_gap_ms)))
 
@@ -293,13 +293,13 @@ def _compute_residual_silence_ratio(
     return float(silent_kept_wins) / float(total_kept_wins)
 
 
-def calibrate_natural_silence_3_to_4_percent(
+def calibrate_residual_silence_5_percent(
     dbfs: np.ndarray,
     step_ms: int,
     total_duration_ms: int,
     user_silence_threshold: float = -42.0,
-    target_min_ratio: float = 0.030,
-    target_max_ratio: float = 0.040
+    target_min_ratio: float = 0.045,
+    target_max_ratio: float = 0.055
 ) -> Tuple[List[Tuple[int, int]], float, float]:
     valid_db = dbfs[dbfs > -85.0]
     if len(valid_db) < 4:
@@ -318,7 +318,7 @@ def calibrate_natural_silence_3_to_4_percent(
     else:
         base_thresh = round(max(float(user_silence_threshold), adaptive_thresh - 2.5), 1)
 
-    target_mid = 0.5 * (target_min_ratio + target_max_ratio)
+    target_mid = 0.05
     best_merged: List[Tuple[int, int]] = [(0, total_duration_ms)]
     best_thresh = base_thresh
     best_res_ratio = 0.035
@@ -326,13 +326,14 @@ def calibrate_natural_silence_3_to_4_percent(
 
     # جميع الإعدادات تقص أي صمت يتجاوز 250ms (0.25s) كحد أقصى
     candidate_configs = [
-        (base_thresh, 200, 50, 180),
-        (base_thresh, 220, 55, 200),
-        (base_thresh, 250, 60, 220),
-        (base_thresh + 1.2, 180, 45, 160),
-        (base_thresh + 1.2, 220, 55, 200),
-        (base_thresh + 2.2, 170, 40, 150),
-        (base_thresh - 1.0, 240, 65, 220),
+        (base_thresh, 200, 65, 180),
+        (base_thresh, 220, 80, 200),
+        (base_thresh, 250, 95, 220),
+        (base_thresh + 1.2, 180, 75, 160),
+        (base_thresh + 1.2, 220, 105, 200),
+        (base_thresh + 2.2, 170, 120, 150),
+        (base_thresh + 0.5, 210, 145, 210),
+        (base_thresh - 1.0, 240, 160, 220),
     ]
 
     for cand_th, min_sil_ms, pad_ms, bridge_ms in candidate_configs:
@@ -357,7 +358,7 @@ def calibrate_natural_silence_3_to_4_percent(
             best_err = err
             best_merged = merged_c
             best_thresh = round(cand_th, 1)
-            best_res_ratio = round(max(0.030, min(0.040, res_ratio)), 4)
+            best_res_ratio = round(res_ratio, 4)
 
     return best_merged, best_thresh, best_res_ratio
 
@@ -451,18 +452,20 @@ def detect_speech_intervals_fast(
             dbfs = 20.0 * np.log10(np.maximum(rms / 32768.0, 1e-7))
             del samples, trimmed
 
-            np_merged_ms, np_thresh, res_sil_ratio = calibrate_natural_silence_3_to_4_percent(
+            np_merged_ms, np_thresh, res_sil_ratio = calibrate_residual_silence_5_percent(
                 dbfs=dbfs,
                 step_ms=step_ms,
                 total_duration_ms=total_duration_ms,
                 user_silence_threshold=silence_threshold
             )
-            # نختار التقطيع الأكثر دقة وحيوية (الذي يقص الصمت > 0.25s بفعالية)
-            if len(pydub_merged_ms) >= len(np_merged_ms) and len(pydub_merged_ms) > 1:
-                merged_ms = pydub_merged_ms
-            else:
+            # أولوية المعايرة التي تستهدف إبقاء قرابة 5% من الصمت الطبيعي.
+            # نستخدم نتيجة pydub فقط إذا تعذرت معايرة NumPy أو كانت النتيجة غير صالحة.
+            if np_merged_ms and any(e > s for s, e in np_merged_ms):
                 merged_ms = np_merged_ms
                 eff_thresh = np_thresh
+                logger.info("Estimated residual silence target=5%%; measured=%.2f%%", res_sil_ratio * 100.0)
+            else:
+                merged_ms = pydub_merged_ms or [(0, total_duration_ms)]
         else:
             merged_ms = pydub_merged_ms or [(0, total_duration_ms)]
 
@@ -475,7 +478,7 @@ def detect_speech_intervals_fast(
 
         _LAST_KEPT_SPEECH_INTERVALS = list(intervals_sec)
         logger.info(
-            f"Aggressive Jump-Cut (>0.25s) complete: eff_thresh={eff_thresh}dBFS, "
+            f"Silence trim complete (target residual silence ~5%): eff_thresh={eff_thresh}dBFS, "
             f"kept_segments={len(intervals_sec)}, orig_dur={total_duration_ms/1000.0:.2f}s"
         )
         return intervals_sec, round(total_duration_ms / 1000.0, 3)
@@ -696,7 +699,7 @@ def remove_silence(
             progress_callback(val, text)
         logger.info(f"Progress: {val*100:.1f}% - {text}")
 
-    update_progress(0.15, "جاري تحليل الإشارة الصوتية عبر pydub وقص فترات الصمت (> 0.25s)...")
+    update_progress(0.15, "جاري تحليل الإشارة الصوتية ومعايرة الصمت المتبقي نحو 5%...")
     intervals_sec, orig_dur = detect_speech_intervals_fast(
         input_path=input_path,
         temp_dir=temp_dir,
@@ -712,7 +715,7 @@ def remove_silence(
 
     has_vid = is_video_file(input_path)
     if has_vid:
-        update_progress(0.55, "جاري تنفيذ القص الهجومي للصمت (Aggressive Jump Cuts > 0.25s) عبر FFmpeg...")
+        update_progress(0.55, "جاري قص فترات الصمت مع استهداف إبقاء نحو 5% للصوت الطبيعي عبر FFmpeg...")
         vf_chain = (
             f"select='{sel_expr}',setpts=N/FRAME_RATE/TB,"
             "scale='if(gt(iw,ih),min(960,iw),-2)':'if(gt(iw,ih),-2,min(960,ih))',fps=30"
@@ -757,7 +760,7 @@ def remove_silence(
         )
 
     force_free_ram()
-    update_progress(1.0, f"اكتملت المعالجة بنجاح! (تم قص {cut_sec:.1f} ثانية من فترات الصمت > 0.25s)")
+    update_progress(1.0, f"اكتملت المعالجة بنجاح! (تم قص {cut_sec:.1f} ثانية من فترات الصمت؛ الهدف إبقاء نحو 5% صمت)")
     return output_path
 
 
