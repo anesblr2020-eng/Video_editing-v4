@@ -25,9 +25,17 @@ class VisualScenePrototypeTests(unittest.TestCase):
         self.assertIn('class="headline"', html)
         self.assertIn('@keyframes headline-in', html)
         self.assertIn('مونتاج الفيديو', html)
+        self.assertIn('background:#dfff00', html)
         self.assertNotIn('من المقاطع إلى فيديو جاهز', html)
         self.assertNotIn('class="caption"', html)
-        self.assertIn('height:78%', html)
+        self.assertIn('background:#f1f1ef', html)
+        self.assertIn('background:#dfff00', html)
+        self.assertNotIn('height:78%', html)
+
+    def test_editorial_headline_is_short_and_verbatim_for_intent(self):
+        html = build_scene_html({"intent":"editing", "spoken_text":"باش يمونتي فيديو وباش ترفعهم السوشيال ميديا"})
+        self.assertIn('<div class="headline">باش يمونتي فيديو</div>', html)
+        self.assertNotIn('<div class="headline">باش يمونتي فيديو وباش ترفعهم', html)
 
     def test_ai_scene_has_distinct_composition(self):
         html = build_scene_html({"intent":"ai", "spoken_text":"بالذكاء الاصطناعي"})
@@ -42,3 +50,4 @@ class VisualScenePrototypeTests(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
