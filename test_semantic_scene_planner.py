@@ -16,8 +16,17 @@ class SemanticScenePlannerTests(unittest.TestCase):
     def test_schema_is_json_serializable(self):
         scenes = plan_scenes("قررت نبدأ مشروعي ونبيع منتج بسعر مناسب.")
         data = scenes_to_json(scenes)
-        self.assertIn('"schema_version": "1.0"', data)
+        self.assertIn('"schema_version": "1.1"', data)
         self.assertIn('"visual_concept"', data)
+
+    def test_video_editing_is_classified_specifically(self):
+        scenes = plan_scenes("المنصة تقدر تمونتي فيديو وتقص الصمت")
+        self.assertEqual(scenes[0]["intent"], "editing")
+        self.assertIn("تايم لاين", scenes[0]["visual_concept"])
+
+    def test_ai_is_classified_specifically(self):
+        scenes = plan_scenes("هذا يتم بالذكاء الاصطناعي")
+        self.assertEqual(scenes[0]["intent"], "ai")
 
     def test_word_timestamps_are_attached(self):
         words = [

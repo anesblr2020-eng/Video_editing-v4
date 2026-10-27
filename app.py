@@ -85,6 +85,7 @@ def json_bytes(data: Any) -> bytes:
 from jobs import get_job, list_jobs, submit_job
 from semantic_scene_planner import plan_scenes, scenes_to_json
 from github_reports import publish_scene_plan
+from visual_scene_prototype import build_scene_html
 
 st.markdown("""
 <section class="hero" dir="rtl">
@@ -211,7 +212,7 @@ if st.button("تحليل المعنى وتقسيمه إلى مشاهد", type="p
 
 planned_scenes = st.session_state.get("planned_scenes", [])
 if planned_scenes:
-    st.success(f"تم إنشاء خطة أولية من {len(planned_scenes)} مشاهد. هذه خطة دلالية أولية وليست توليدًا بصريًا بعد.")
+    st.success(f"تم إنشاء خطة أولية من {len(planned_scenes)} مشاهد. هذه خطة أولية بأسلوب تحريري مستلهم من المراجع؛ التصنيف محلي وقد يحتاج مراجعة.")
     for scene in planned_scenes:
         with st.container(border=True):
             st.markdown(f"**المشهد {scene['scene_number']:02d} · {scene['intent_label']}**")
@@ -229,6 +230,16 @@ if planned_scenes:
                 st.write(scene["motion_direction"])
             if scene.get("start_time") is not None and scene.get("end_time") is not None:
                 st.caption(f"التوقيت التقديري: {scene['start_time']:.2f}s – {scene['end_time']:.2f}s")
+    st.markdown('<div class="panel" dir="rtl"><div class="panel-title">المرحلة 08 · نموذج أول مشهد متحرك</div><div class="panel-sub">تم تحديث النموذج ليتبع أسلوب المراجع: تكوين تحريري عمودي، نص حركي، تباين قوي، ومشاهد مخصصة للمونتاج والذكاء الاصطناعي. المعاينة ما تزال نموذج SVG/HTML وليست فيديو واقعيًا نهائيًا.</div></div>', unsafe_allow_html=True)
+    scene_labels = [f"{item['scene_number']:02d} · {item.get('intent_label', item.get('intent', 'مشهد'))} · {item.get('spoken_text', '')[:45]}" for item in planned_scenes]
+    selected_scene_index = st.selectbox("اختر مشهدًا للنموذج", range(len(planned_scenes)), format_func=lambda i: scene_labels[i], key="visual_scene_pick")
+    if st.button("إنشاء معاينة المشهد", type="primary", use_container_width=True, key="build_visual_scene"):
+        st.session_state["visual_scene_html"] = build_scene_html(planned_scenes[selected_scene_index])
+        st.session_state["visual_scene_label"] = scene_labels[selected_scene_index]
+    if st.session_state.get("visual_scene_html"):
+        st.caption(f"المعاينة الحالية: {st.session_state.get('visual_scene_label', 'مشهد')}")
+        st.components.v1.html(st.session_state["visual_scene_html"], height=760, scrolling=False)
+        st.download_button("تنزيل معاينة المشهد HTML", data=st.session_state["visual_scene_html"].encode("utf-8"), file_name="visual_scene_prototype.html", mime="text/html", use_container_width=True)
     st.download_button("تنزيل خطة المشاهد JSON", data=scenes_to_json(planned_scenes).encode("utf-8"), file_name="semantic_scene_plan.json", mime="application/json", use_container_width=True)
     st.warning("مستودعك عام: عند النشر سيصبح نص المشاهد وخطتها متاحين للعامة. لا تنشر محتوى حساسًا.")
     if st.button("نشر تقرير المشاهد إلى GitHub ونسخ رابطه", use_container_width=True, key="publish_scene_report"):
@@ -263,4 +274,4 @@ with st.expander("مهم حول العمل في الخلفية"):
     - هذه ليست بعدُ قائمة مهام موزعة/مضمونة الاستمرار عبر إعادة تشغيل الخادم؛ لذلك لا نعد باستمرار المعالجة إذا أُغلق الخادم نفسه.
     """)
 
-st.markdown('<div style="text-align:center;color:#60736a;font-size:12px;padding:28px 0 4px">إعادة البناء — المرحلة 07: الصوت وخطة المشاهد الدلالية وتقارير GitHub</div>', unsafe_allow_html=True)
+st.markdown('<div style="text-align:center;color:#60736a;font-size:12px;padding:28px 0 4px">إعادة البناء — المرحلة 08: الصوت والتخطيط الدلالي ونموذج المشهد</div>', unsafe_allow_html=True)
