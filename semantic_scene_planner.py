@@ -69,7 +69,7 @@ def _classify(text: str) -> tuple[str, str, str, list[str], str, str]:
     return spec[0], spec[1], spec[3], list(spec[4]), spec[5], spec[6]
 
 
-def _split_long(text: str, max_words: int = 32) -> list[str]:
+def _split_long(text: str, max_words: int = 12) -> list[str]:
     words = text.split()
     if len(words) <= max_words:
         return [text.strip()] if text.strip() else []
@@ -99,7 +99,7 @@ def _sentences(text: str) -> list[str]:
     # Merge tiny fragments with a neighbor to avoid one-word scenes.
     merged: list[str] = []
     for chunk in chunks:
-        if merged and len(chunk.split()) < 5 and len(merged[-1].split()) < 24:
+        if merged and len(chunk.split()) < 3 and len(merged[-1].split()) < 14:
             merged[-1] = f"{merged[-1]} {chunk}"
         else:
             merged.append(chunk)
@@ -155,11 +155,11 @@ def plan_scenes(text: str, words: list[dict[str, Any]] | None = None) -> list[di
             "motion_direction": motion,
             "start_time": round(start_time, 3) if start_time is not None else None,
             "end_time": round(end_time, 3) if end_time is not None else None,
-            "planning_method": "local_heuristic_v2_reference_style",
+            "planning_method": "local_heuristic_v3_visual_beats",
             "limitations": "خطة أولية بقواعد محلية؛ قد تحتاج مراجعة بشرية ولا تمثل فهمًا لغويًا عميقًا أو توليدًا بصريًا.",
         })
     return scenes
 
 
 def scenes_to_json(scenes: list[dict[str, Any]]) -> str:
-    return json.dumps({"schema_version": "1.1", "planner": "local_heuristic_v2_reference_style", "scenes": scenes}, ensure_ascii=False, indent=2)
+    return json.dumps({"schema_version": "1.1", "planner": "local_heuristic_v3_visual_beats", "scenes": scenes}, ensure_ascii=False, indent=2)

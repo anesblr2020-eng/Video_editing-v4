@@ -86,6 +86,7 @@ from jobs import get_job, list_jobs, submit_job
 from semantic_scene_planner import plan_scenes, scenes_to_json
 from github_reports import publish_scene_plan
 from visual_scene_prototype import build_scene_html
+from auto_visual_assets import generate_scene_image
 
 st.markdown("""
 <section class="hero" dir="rtl">
@@ -230,18 +231,41 @@ if planned_scenes:
                 st.write(scene["motion_direction"])
             if scene.get("start_time") is not None and scene.get("end_time") is not None:
                 st.caption(f"التوقيت التقديري: {scene['start_time']:.2f}s – {scene['end_time']:.2f}s")
-    st.markdown('<div class="panel" dir="rtl"><div class="panel-title">المرحلة 08 · نموذج أول مشهد متحرك</div><div class="panel-sub">تم تحديث النموذج ليتبع أسلوب المراجع: تكوين تحريري عمودي، نص حركي، تباين قوي، ومشاهد مخصصة للمونتاج والذكاء الاصطناعي. المعاينة ما تزال نموذج SVG/HTML وليست فيديو واقعيًا نهائيًا.</div></div>', unsafe_allow_html=True)
+    st.markdown('<div class="panel" dir="rtl"><div class="panel-title">المرحلة 14 · توليد أصول بصرية تلقائيًا</div><div class="panel-sub">تم تحديث النموذج ليتبع أسلوب المراجع: تكوين تحريري عمودي، نص حركي، تباين قوي، ومشاهد مخصصة للمونتاج والذكاء الاصطناعي. المعاينة ما تزال نموذج SVG/HTML وليست فيديو واقعيًا نهائيًا.</div></div>', unsafe_allow_html=True)
     scene_labels = [f"{item['scene_number']:02d} · {item.get('intent_label', item.get('intent', 'مشهد'))} · {item.get('spoken_text', '')[:45]}" for item in planned_scenes]
     selected_scene_index = st.selectbox("اختر مشهدًا للنموذج", range(len(planned_scenes)), format_func=lambda i: scene_labels[i], key="visual_scene_pick")
-    scene_image = st.file_uploader("صورة واقعية لهذا المشهد (اختياري)", type=["png", "jpg", "jpeg", "webp"], key="scene_visual_asset", help="عند رفع صورة، تستخدمها المعاينة بدل الرسم المتجهي المؤقت. تُضمّن الصورة داخل HTML الذي تنزّله.")
-    if scene_image:
-        st.image(scene_image, caption="الأصل البصري الذي سيُستخدم في المعاينة", use_container_width=True)
+    st.markdown("**الأصول البصرية التلقائية** — يولّد النظام صورة مخصصة لكل لقطة؛ لا حاجة لرفع الصور يدويًا. يتطلب ذلك `REPLICATE_API_TOKEN` في Secrets، وقد تُحتسب رسوم حسب استخدام مزود التوليد.")
+    token_value = os.getenv("REPLICATE_API_TOKEN", "")
+    try:
+        token_value = token_value or str(st.secrets.get("REPLICATE_API_TOKEN", ""))
+    except Exception:
+        pass
+    asset_dir = OUTPUT_DIR / "scene_assets"
+    if st.button("توليد صور تلقائيًا لكل اللقطات", type="primary", use_container_width=True, key="generate_scene_assets", disabled=not bool(token_value)):
+        bar = st.progress(0, text="بدء توليد الصور...")
+        generated, failures = 0, []
+        for idx, scene in enumerate(planned_scenes):
+            try:
+                generate_scene_image(scene, asset_dir, token=token_value)
+                generated += 1
+            except Exception as exc:
+                failures.append(f"المشهد {scene.get('scene_number')}: {exc}")
+            bar.progress((idx + 1) / max(1, len(planned_scenes)), text=f"توليد اللقطة {idx + 1}/{len(planned_scenes)}")
+        st.session_state["scene_asset_dir"] = str(asset_dir)
+        if generated:
+            st.success(f"تم توليد {generated} صورة من أصل {len(planned_scenes)}.")
+        for failure in failures:
+            st.warning(failure)
+    if not token_value:
+        st.info("أضف `REPLICATE_API_TOKEN` إلى Secrets لتفعيل التوليد التلقائي. لن يرجع النظام بصمت إلى الرسم المتجهي على أنه نتيجة نهائية.")
+    selected_asset = asset_dir / f"scene_{int(planned_scenes[selected_scene_index].get('scene_number', 0)):03d}.webp"
+    if selected_asset.is_file():
+        st.image(str(selected_asset), caption="الصورة التي ولّدها المحرك لهذه اللقطة", use_container_width=True)
     if st.button("إنشاء معاينة المشهد", type="primary", use_container_width=True, key="build_visual_scene"):
         image_data_uri = None
-        if scene_image:
+        if selected_asset.is_file():
             import base64
-            mime = scene_image.type if scene_image.type in {"image/png", "image/jpeg", "image/webp"} else "image/png"
-            image_data_uri = f"data:{mime};base64,{base64.b64encode(scene_image.getvalue()).decode('ascii')}"
+            image_data_uri = "data:image/webp;base64," + base64.b64encode(selected_asset.read_bytes()).decode("ascii")
         st.session_state["visual_scene_html"] = build_scene_html(planned_scenes[selected_scene_index], image_data_uri=image_data_uri)
         st.session_state["visual_scene_label"] = scene_labels[selected_scene_index]
     if st.session_state.get("visual_scene_html"):
