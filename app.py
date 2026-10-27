@@ -86,11 +86,11 @@ from jobs import get_job, list_jobs, submit_job
 from semantic_scene_planner import plan_scenes, scenes_to_json
 from github_reports import publish_scene_plan
 from visual_scene_prototype import build_scene_html
-from auto_visual_assets import generate_scene_image
+from editorial_mp4 import render_editorial_mp4
 
 st.markdown("""
 <section class="hero" dir="rtl">
-  <div class="eyebrow">إعادة البناء · المرحلة 05</div>
+  <div class="eyebrow">إعادة البناء · المرحلة 15</div>
   <h1>مختبر الصوت</h1>
   <p>أرسل مهمة التفريغ أو قص الصمت لتعمل في الخلفية. يمكنك تحديث الصفحة أو إغلاق تبويب المتصفح؛ ستواصل المهمة العمل ما دام خادم التطبيق نفسه يعمل.</p>
 </section>
@@ -231,47 +231,26 @@ if planned_scenes:
                 st.write(scene["motion_direction"])
             if scene.get("start_time") is not None and scene.get("end_time") is not None:
                 st.caption(f"التوقيت التقديري: {scene['start_time']:.2f}s – {scene['end_time']:.2f}s")
-    st.markdown('<div class="panel" dir="rtl"><div class="panel-title">المرحلة 14 · توليد أصول بصرية تلقائيًا</div><div class="panel-sub">تم تحديث النموذج ليتبع أسلوب المراجع: تكوين تحريري عمودي، نص حركي، تباين قوي، ومشاهد مخصصة للمونتاج والذكاء الاصطناعي. المعاينة ما تزال نموذج SVG/HTML وليست فيديو واقعيًا نهائيًا.</div></div>', unsafe_allow_html=True)
-    scene_labels = [f"{item['scene_number']:02d} · {item.get('intent_label', item.get('intent', 'مشهد'))} · {item.get('spoken_text', '')[:45]}" for item in planned_scenes]
-    selected_scene_index = st.selectbox("اختر مشهدًا للنموذج", range(len(planned_scenes)), format_func=lambda i: scene_labels[i], key="visual_scene_pick")
-    st.markdown("**الأصول البصرية التلقائية** — يولّد النظام صورة مخصصة لكل لقطة؛ لا حاجة لرفع الصور يدويًا. يتطلب ذلك `REPLICATE_API_TOKEN` في Secrets، وقد تُحتسب رسوم حسب استخدام مزود التوليد.")
-    token_value = os.getenv("REPLICATE_API_TOKEN", "")
-    try:
-        token_value = token_value or str(st.secrets.get("REPLICATE_API_TOKEN", ""))
-    except Exception:
-        pass
-    asset_dir = OUTPUT_DIR / "scene_assets"
-    if st.button("توليد صور تلقائيًا لكل اللقطات", type="primary", use_container_width=True, key="generate_scene_assets", disabled=not bool(token_value)):
-        bar = st.progress(0, text="بدء توليد الصور...")
-        generated, failures = 0, []
-        for idx, scene in enumerate(planned_scenes):
-            try:
-                generate_scene_image(scene, asset_dir, token=token_value)
-                generated += 1
-            except Exception as exc:
-                failures.append(f"المشهد {scene.get('scene_number')}: {exc}")
-            bar.progress((idx + 1) / max(1, len(planned_scenes)), text=f"توليد اللقطة {idx + 1}/{len(planned_scenes)}")
-        st.session_state["scene_asset_dir"] = str(asset_dir)
-        if generated:
-            st.success(f"تم توليد {generated} صورة من أصل {len(planned_scenes)}.")
-        for failure in failures:
-            st.warning(failure)
-    if not token_value:
-        st.info("أضف `REPLICATE_API_TOKEN` إلى Secrets لتفعيل التوليد التلقائي. لن يرجع النظام بصمت إلى الرسم المتجهي على أنه نتيجة نهائية.")
-    selected_asset = asset_dir / f"scene_{int(planned_scenes[selected_scene_index].get('scene_number', 0)):03d}.webp"
-    if selected_asset.is_file():
-        st.image(str(selected_asset), caption="الصورة التي ولّدها المحرك لهذه اللقطة", use_container_width=True)
-    if st.button("إنشاء معاينة المشهد", type="primary", use_container_width=True, key="build_visual_scene"):
-        image_data_uri = None
-        if selected_asset.is_file():
-            import base64
-            image_data_uri = "data:image/webp;base64," + base64.b64encode(selected_asset.read_bytes()).decode("ascii")
-        st.session_state["visual_scene_html"] = build_scene_html(planned_scenes[selected_scene_index], image_data_uri=image_data_uri)
-        st.session_state["visual_scene_label"] = scene_labels[selected_scene_index]
-    if st.session_state.get("visual_scene_html"):
-        st.caption(f"المعاينة الحالية: {st.session_state.get('visual_scene_label', 'مشهد')}")
-        st.components.v1.html(st.session_state["visual_scene_html"], height=760, scrolling=False)
-        st.download_button("تنزيل معاينة المشهد HTML", data=st.session_state["visual_scene_html"].encode("utf-8"), file_name="visual_scene_prototype.html", mime="text/html", use_container_width=True)
+    st.markdown('<div class="panel" dir="rtl"><div class="panel-title">المرحلة 15 · تركيب MP4 محليًا دون مولّد صور</div><div class="panel-sub">يستخدم الفيديو الذي ترفعه كأصل بصري حقيقي، ويضيف إليه قصًّا عموديًا وعناوين تحريرية قصيرة وحركة كاميرا وتغييرات متتابعة وفق خطة المشاهد. لا يحتاج Replicate أو أي API لتوليد الصور. هذه طبقة مونتاج فوق لقطات المصدر وليست مولّد مشاهد فوتوغرافية جديدة من الصفر.</div></div>', unsafe_allow_html=True)
+    render_source = st.file_uploader("ارفع الفيديو الأصلي لإنتاج MP4", type=["mp4", "mov", "mkv", "webm", "avi", "m4v"], key="editorial_render_source")
+    if render_source:
+        st.caption(f"المصدر: {render_source.name} · {render_source.size / (1024*1024):.1f} MB")
+    if st.button("تركيب فيديو MP4 الآن", type="primary", use_container_width=True, key="render_editorial_mp4", disabled=not bool(render_source)):
+        source_path = save_upload(render_source)
+        output_path = OUTPUT_DIR / f"editorial_{int(time.time())}.mp4"
+        progress = st.progress(0, text="بدء تركيب الفيديو محليًا…")
+        try:
+            def report_render(value, message):
+                progress.progress(max(0.0,min(1.0,float(value))), text=message)
+            result = render_editorial_mp4(source_path, planned_scenes, output_path, report_render)
+            st.session_state["last_editorial_mp4"] = str(result)
+            st.success("اكتمل تركيب ملف MP4 والتحقق من وجوده.")
+        except Exception as exc:
+            st.error(f"تعذر تركيب الفيديو: {type(exc).__name__}: {exc}")
+    rendered_path = Path(st.session_state.get("last_editorial_mp4", "")) if st.session_state.get("last_editorial_mp4") else None
+    if rendered_path and rendered_path.is_file():
+        st.video(str(rendered_path))
+        st.download_button("تنزيل فيديو MP4", data=rendered_path.read_bytes(), file_name=rendered_path.name, mime="video/mp4", use_container_width=True)
     st.download_button("تنزيل خطة المشاهد JSON", data=scenes_to_json(planned_scenes).encode("utf-8"), file_name="semantic_scene_plan.json", mime="application/json", use_container_width=True)
     st.warning("مستودعك عام: عند النشر سيصبح نص المشاهد وخطتها متاحين للعامة. لا تنشر محتوى حساسًا.")
     if st.button("نشر تقرير المشاهد إلى GitHub ونسخ رابطه", use_container_width=True, key="publish_scene_report"):
