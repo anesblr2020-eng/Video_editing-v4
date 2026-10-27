@@ -20,6 +20,13 @@ class VisualScenePrototypeTests(unittest.TestCase):
         self.assertIn('class="playhead"', html)
         self.assertIn('@keyframes playhead', html)
 
+    def test_reference_style_has_kinetic_headline_and_speech_caption(self):
+        html = build_scene_html({"intent":"editing", "spoken_text":"مونتاج الفيديو", "intent_label":"مونتاج"})
+        self.assertIn('class="headline"', html)
+        self.assertIn('@keyframes headline-in', html)
+        self.assertIn('من المقاطع إلى فيديو جاهز', html)
+        self.assertIn('مونتاج الفيديو', html)
+
     def test_ai_scene_has_distinct_composition(self):
         html = build_scene_html({"intent":"ai", "spoken_text":"بالذكاء الاصطناعي"})
         self.assertIn('id="ai-editorial"', html)
