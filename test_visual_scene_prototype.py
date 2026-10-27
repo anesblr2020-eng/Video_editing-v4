@@ -42,6 +42,19 @@ class VisualScenePrototypeTests(unittest.TestCase):
         self.assertIn('id="ai-editorial"', html)
         self.assertIn('class="ai-orbit"', html)
 
+
+    def test_uploaded_real_image_replaces_vector_scene(self):
+        data_uri = "data:image/png;base64,aGVsbG8="
+        rendered = build_scene_html({"intent":"time", "spoken_text":"مشكل تاع الوقت"}, image_data_uri=data_uri)
+        self.assertIn('class="real-asset"', rendered)
+        self.assertIn(data_uri, rendered)
+        self.assertIn('svg{display:none}', rendered)
+
+    def test_invalid_image_data_uri_is_ignored(self):
+        rendered = build_scene_html({"intent":"time", "spoken_text":"الوقت"}, image_data_uri='javascript:alert(1)')
+        self.assertNotIn('class="real-asset"', rendered)
+        self.assertNotIn('javascript:alert(1)', rendered)
+
     def test_escapes_text_and_limits_duration(self):
         html = build_scene_html({"intent":"product", "spoken_text":"<script>alert(1)</script>"}, 99)
         self.assertIn('&lt;script&gt;', html)

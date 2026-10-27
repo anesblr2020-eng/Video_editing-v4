@@ -233,8 +233,16 @@ if planned_scenes:
     st.markdown('<div class="panel" dir="rtl"><div class="panel-title">المرحلة 08 · نموذج أول مشهد متحرك</div><div class="panel-sub">تم تحديث النموذج ليتبع أسلوب المراجع: تكوين تحريري عمودي، نص حركي، تباين قوي، ومشاهد مخصصة للمونتاج والذكاء الاصطناعي. المعاينة ما تزال نموذج SVG/HTML وليست فيديو واقعيًا نهائيًا.</div></div>', unsafe_allow_html=True)
     scene_labels = [f"{item['scene_number']:02d} · {item.get('intent_label', item.get('intent', 'مشهد'))} · {item.get('spoken_text', '')[:45]}" for item in planned_scenes]
     selected_scene_index = st.selectbox("اختر مشهدًا للنموذج", range(len(planned_scenes)), format_func=lambda i: scene_labels[i], key="visual_scene_pick")
+    scene_image = st.file_uploader("صورة واقعية لهذا المشهد (اختياري)", type=["png", "jpg", "jpeg", "webp"], key="scene_visual_asset", help="عند رفع صورة، تستخدمها المعاينة بدل الرسم المتجهي المؤقت. تُضمّن الصورة داخل HTML الذي تنزّله.")
+    if scene_image:
+        st.image(scene_image, caption="الأصل البصري الذي سيُستخدم في المعاينة", use_container_width=True)
     if st.button("إنشاء معاينة المشهد", type="primary", use_container_width=True, key="build_visual_scene"):
-        st.session_state["visual_scene_html"] = build_scene_html(planned_scenes[selected_scene_index])
+        image_data_uri = None
+        if scene_image:
+            import base64
+            mime = scene_image.type if scene_image.type in {"image/png", "image/jpeg", "image/webp"} else "image/png"
+            image_data_uri = f"data:{mime};base64,{base64.b64encode(scene_image.getvalue()).decode('ascii')}"
+        st.session_state["visual_scene_html"] = build_scene_html(planned_scenes[selected_scene_index], image_data_uri=image_data_uri)
         st.session_state["visual_scene_label"] = scene_labels[selected_scene_index]
     if st.session_state.get("visual_scene_html"):
         st.caption(f"المعاينة الحالية: {st.session_state.get('visual_scene_label', 'مشهد')}")
